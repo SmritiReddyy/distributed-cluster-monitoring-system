@@ -7,8 +7,8 @@
 #include "logger.hpp"
 
 const char* MANAGER_IP = "127.0.0.1";
-const int PORT = 5000;
-const int HEARTBEAT_INTERVAL = 2; // seconds
+const int PORT = 5050;
+const int HEARTBEAT_INTERVAL = 5; // seconds
 
 Logger logger("worker.log");
 

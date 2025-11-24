@@ -1,16 +1,13 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -pthread -Wall
 
-SRC = logger.cpp manager.cpp worker.cpp raft/raft_node.cpp
-OBJ = $(SRC:.cpp=.o)
-
 all: manager worker
 
-manager: manager.cpp logger.cpp raft/raft_node.cpp
-	$(CXX) $(CXXFLAGS) -o manager manager.cpp logger.cpp raft/raft_node.cpp
+manager: manager.cpp logger.cpp
+	$(CXX) $(CXXFLAGS) -o manager manager.cpp logger.cpp
 
 worker: worker.cpp logger.cpp
 	$(CXX) $(CXXFLAGS) -o worker worker.cpp logger.cpp
 
 clean:
-	rm -f manager worker *.o raft/*.o *.log state/*.json
+	rm -f manager worker *.log
