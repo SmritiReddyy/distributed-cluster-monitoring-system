@@ -7,6 +7,10 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include "logger.hpp"
+#include <fstream>
+#include "include/json.hpp"
+using json = nlohmann::json;
+
 
 struct NodeInfo {
     time_t last_seen;
@@ -19,8 +23,7 @@ std::mutex cluster_mutex;
 const int PORT = 5050;
 const int TIMEOUT = 11; // seconds
 time_t last_display_time = 0;
-const int DISPLAY_INTERVAL = 10; // seconds (change to 10 if you want)
-
+const int DISPLAY_INTERVAL = 10; 
 Logger logger("manager.log");
 
 // ----------------------------------------------------
@@ -48,6 +51,32 @@ void displayClusterState() {
     }
     std::cout << "=====================\n" << std::endl;
 }
+
+void persistClusterState() {
+    json j;
+    {
+        std::lock_guard<std::mutex> lock(cluster_mutex);
+        for (auto &p : cluster) {
+            j[p.first] = {
+                {"status", p.second.status},
+                {"last_seen", p.second.last_seen}
+            };
+        }
+    }
+    std::ofstream file("cluster_state.json");
+    file << j.dump(4);
+}
+
+void loadClusterState() {
+    std::ifstream file("cluster_state.json");
+    if (!file.is_open()) return;
+    json j; file >> j;
+    for (auto &[node, info] : j.items()) {
+        cluster[node] = {info["last_seen"], info["status"]};
+    }
+    logger.info("Cluster state loaded from file.");
+}
+
 
 
 // ----------------------------------------------------
@@ -92,6 +121,7 @@ void monitorNodes() {
         // Display cluster state outside lock (so it never gets stuck)
         if (failure_detected) {
             displayClusterState();
+            persistClusterState();
         }
 
         // Periodic display every 10 seconds
@@ -126,6 +156,8 @@ void handleClient(int client_sock) {
             time_t now = time(nullptr);
             if (difftime(now, last_display_time) >= DISPLAY_INTERVAL) {
                 displayClusterState();
+                persistClusterState();
+
                 last_display_time = now;
 }
 
@@ -161,6 +193,7 @@ void handleClient(int client_sock) {
             time_t now = time(nullptr);
             if (difftime(now, last_display_time) >= DISPLAY_INTERVAL) {
                 displayClusterState();
+                persistClusterState();
                 last_display_time = now;
             }
         }
@@ -200,6 +233,8 @@ void startServer() {
 // Main
 // ----------------------------------------------------
 int main() {
+    startServer();
+    loadClusterState();
     startServer();
     return 0;
 }

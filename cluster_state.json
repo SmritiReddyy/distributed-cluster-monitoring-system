@@ -1,0 +1,10 @@
+{
+    "node1": {
+        "last_seen": 1764108181,
+        "status": "failed"
+    },
+    "node2": {
+        "last_seen": 1764108163,
+        "status": "failed"
+    }
+}
