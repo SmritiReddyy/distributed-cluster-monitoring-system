@@ -142,48 +142,6 @@ void monitorNodes() {
 // }
 
 
-// void handleClient(int client_sock) {
-//     char buffer[1024];
-//     while (true) {
-//         memset(buffer, 0, sizeof(buffer));
-//         ssize_t bytes_read = read(client_sock, buffer, sizeof(buffer) - 1);
-//         if (bytes_read <= 0) break;
-
-//         std::string msg(buffer);
-//         msg.erase(msg.find_last_not_of(" \n\r\t") + 1); // trim trailing newline
-
-//         if (msg.rfind("REGISTER ", 0) == 0) {
-//             std::string node_id = msg.substr(9); // skip "REGISTER "
-//             node_id.erase(0, node_id.find_first_not_of(" \n\r\t"));
-//             node_id.erase(node_id.find_last_not_of(" \n\r\t") + 1);
-
-//             {
-//                 std::lock_guard<std::mutex> lock(cluster_mutex);
-//                 cluster[node_id] = {time(nullptr), "active"};
-//             }
-//             logger.info("Node " + node_id + " registered (fresh or recovered).");
-//             persistClusterState();
-//         }
-//         else if (msg.rfind("HEARTBEAT ", 0) == 0) {
-//             std::string node_id = msg.substr(10); // skip "HEARTBEAT "
-//             node_id.erase(0, node_id.find_first_not_of(" \n\r\t"));
-//             node_id.erase(node_id.find_last_not_of(" \n\r\t") + 1);
-
-//             if (node_id.empty()) continue; // skip malformed entries
-
-//             {
-//                 std::lock_guard<std::mutex> lock(cluster_mutex);
-//                 cluster[node_id].last_seen = time(nullptr);
-//                 cluster[node_id].status = "active";
-//             }
-//             logger.info("Heartbeat received from " + node_id);
-//             persistClusterState();
-//         }
-//     }
-
-//     close(client_sock);
-// }
-
 void handleClient(int client_sock) {
     char buffer[1024];
     while (true) {
