@@ -7,6 +7,10 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fstream>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <csignal>
 #include "logger.hpp"
 #include "include/json.hpp"
 
@@ -206,11 +210,52 @@ void startServer() {
     }
 }
 
+bool isPortAvailable(int port) {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    int result = connect(sock, (struct sockaddr*)&addr, sizeof(addr));
+    close(sock);
+    // If connect() fails, port not in use (manager down)
+    return (result < 0);
+}
+
+int main(int argc, char* argv[]) {
+    std::string role = "primary";
+    if (argc >= 2) role = argv[1];
+
+    if (role == "primary") {
+        std::cout << "[INFO] Starting PRIMARY manager..." << std::endl;
+        loadClusterState();
+        startServer();
+    }
+    else if (role == "backup") {
+        std::cout << "[INFO] Starting BACKUP manager monitor..." << std::endl;
+
+        while (true) {
+            if (isPortAvailable(PORT)) {
+                std::cout << "[WARN] Primary not reachable. Taking over as ACTIVE..." << std::endl;
+                loadClusterState();
+                startServer();   // This will block until terminated
+            } else {
+                std::cout << "[INFO] Primary alive. Backup waiting..." << std::endl;
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
+    }
+    else {
+        std::cerr << "Usage: ./manager [primary|backup]" << std::endl;
+    }
+
+    return 0;
+}
 // ----------------------------------------------------
 // Main
 // ----------------------------------------------------
-int main() {
-    loadClusterState();
-    startServer();
-    return 0;
-}
+// int main() {
+//     loadClusterState();
+//     startServer();
+//     return 0;
+// }
