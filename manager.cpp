@@ -163,27 +163,6 @@ void handleClient(int client_sock) {
 // ----------------------------------------------------
 // Server start function
 // ----------------------------------------------------
-// void startServer() {
-//     int server_sock = socket(AF_INET, SOCK_STREAM, 0);
-//     sockaddr_in server_addr{};
-//     server_addr.sin_family = AF_INET;
-//     server_addr.sin_addr.s_addr = INADDR_ANY;
-//     server_addr.sin_port = htons(PORT);
-
-//     bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
-//     listen(server_sock, 5);
-//     logger.info("Manager listening on port " + std::to_string(PORT));
-
-//     std::thread monitorThread(monitorNodes);
-//     monitorThread.detach();
-
-//     while (true) {
-//         sockaddr_in client_addr{};
-//         socklen_t client_len = sizeof(client_addr);
-//         int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
-//         std::thread(handleClient, client_sock).detach();
-//     }
-// }
 void startServer() {
     server_sock_global = socket(AF_INET, SOCK_STREAM, 0);
     
@@ -232,6 +211,9 @@ bool isPortAvailable(int port) {
     return (result < 0);
 }
 
+// ----------------------------------------------------
+// Main
+// ----------------------------------------------------
 int main(int argc, char* argv[]) {
     std::string role = "primary";
     if (argc >= 2) role = argv[1];
@@ -261,11 +243,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-// ----------------------------------------------------
-// Main
-// ----------------------------------------------------
-// int main() {
-//     loadClusterState();
-//     startServer();
-//     return 0;
-// }
+
