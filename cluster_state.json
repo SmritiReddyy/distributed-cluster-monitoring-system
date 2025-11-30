@@ -1,10 +1,10 @@
 {
     "node1": {
-        "last_seen": 1764538865,
+        "last_seen": 1764539770,
         "status": "active"
     },
     "node2": {
-        "last_seen": 1764538859,
-        "status": "active"
+        "last_seen": 1764539758,
+        "status": "failed"
     }
 }
