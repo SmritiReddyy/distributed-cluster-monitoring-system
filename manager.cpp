@@ -13,7 +13,20 @@
 #include <csignal>
 #include "logger.hpp"
 #include "include/json.hpp"
+#include <csignal>
 
+// Add these global variables after your other globals
+volatile sig_atomic_t shutdown_requested = 0;
+int server_sock_global = -1;
+
+void signalHandler(int signum) {
+    std::cout << "\n[INFO] Shutdown signal received. Cleaning up...\n";
+    shutdown_requested = 1;
+    if (server_sock_global != -1) {
+        close(server_sock_global);
+    }
+    exit(0);
+}
 using json = nlohmann::json;
 
 struct NodeInfo {
@@ -111,41 +124,6 @@ void monitorNodes() {
 // ----------------------------------------------------
 // Handles each client connection
 // ----------------------------------------------------
-// void handleClient(int client_sock) {
-//     char buffer[1024];
-//     while (true) {
-//         memset(buffer, 0, sizeof(buffer));
-//         ssize_t bytes_read = read(client_sock, buffer, sizeof(buffer) - 1);
-//         if (bytes_read <= 0) break;
-
-//         std::string msg(buffer);
-//         if (msg.rfind("REGISTER", 0) == 0) {
-//             std::string node_id = msg.substr(9);
-//             node_id.erase(node_id.find_last_not_of(" \n\r\t") + 1);
-//             {
-//                 std::lock_guard<std::mutex> lock(cluster_mutex);
-//                 cluster.erase(node_id); // remove any old stale entry
-//                 cluster[node_id] = {time(nullptr), "active"};
-//             }
-//             logger.info("Node " + node_id + " registered (fresh or recovered).");
-//             persistClusterState();
-//         }
-//         else if (msg.rfind("HEARTBEAT", 0) == 0) {
-//             std::string node_id = msg.substr(10);
-//             node_id.erase(node_id.find_last_not_of(" \n\r\t") + 1);
-//             {
-//                 std::lock_guard<std::mutex> lock(cluster_mutex);
-//                 cluster[node_id].last_seen = time(nullptr);
-//                 cluster[node_id].status = "active";
-//             }
-//             logger.info("Heartbeat received from " + node_id);
-//             persistClusterState();
-//         }
-//     }
-//     close(client_sock);
-// }
-
-
 void handleClient(int client_sock) {
     char buffer[1024];
     while (true) {
@@ -154,60 +132,92 @@ void handleClient(int client_sock) {
         if (bytes_read <= 0) break;
 
         std::string msg(buffer);
-
-        // Trim leading/trailing whitespace
-        while (!msg.empty() && (msg.back() == '\n' || msg.back() == '\r' || msg.back() == ' ' || msg.back() == '\t'))
-            msg.pop_back();
-        while (!msg.empty() && (msg.front() == '\n' || msg.front() == '\r' || msg.front() == ' ' || msg.front() == '\t'))
-            msg.erase(msg.begin());
-
-        if (msg.rfind("REGISTER ", 0) == 0) {
-            std::string node_id = msg.substr(9);
-            if (!node_id.empty()) {
+        
+        // Process line by line to prevent concatenation
+        size_t pos = 0;
+        while ((pos = msg.find('\n')) != std::string::npos) {
+            std::string line = msg.substr(0, pos);
+            msg.erase(0, pos + 1);
+            
+            // Trim whitespace
+            line.erase(0, line.find_first_not_of(" \t\r"));
+            line.erase(line.find_last_not_of(" \t\r") + 1);
+            
+            if (line.rfind("REGISTER ", 0) == 0) {
+                std::string node_id = line.substr(9);
                 std::lock_guard<std::mutex> lock(cluster_mutex);
                 cluster[node_id] = {time(nullptr), "active"};
+                logger.info("REGISTER received for " + node_id);
             }
-            logger.info("REGISTER received for " + node_id);
-        }
-        else if (msg.rfind("HEARTBEAT ", 0) == 0) {
-            std::string node_id = msg.substr(10);
-            if (!node_id.empty()) {
+            else if (line.rfind("HEARTBEAT ", 0) == 0) {
+                std::string node_id = line.substr(10);
                 std::lock_guard<std::mutex> lock(cluster_mutex);
                 cluster[node_id].last_seen = time(nullptr);
                 cluster[node_id].status = "active";
             }
         }
-        else {
-            logger.warn("Unrecognized message: [" + msg + "]");
-        }
     }
-
     close(client_sock);
 }
 
 // ----------------------------------------------------
 // Server start function
 // ----------------------------------------------------
+// void startServer() {
+//     int server_sock = socket(AF_INET, SOCK_STREAM, 0);
+//     sockaddr_in server_addr{};
+//     server_addr.sin_family = AF_INET;
+//     server_addr.sin_addr.s_addr = INADDR_ANY;
+//     server_addr.sin_port = htons(PORT);
+
+//     bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
+//     listen(server_sock, 5);
+//     logger.info("Manager listening on port " + std::to_string(PORT));
+
+//     std::thread monitorThread(monitorNodes);
+//     monitorThread.detach();
+
+//     while (true) {
+//         sockaddr_in client_addr{};
+//         socklen_t client_len = sizeof(client_addr);
+//         int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
+//         std::thread(handleClient, client_sock).detach();
+//     }
+// }
 void startServer() {
-    int server_sock = socket(AF_INET, SOCK_STREAM, 0);
+    server_sock_global = socket(AF_INET, SOCK_STREAM, 0);
+    
+    // Allow port reuse immediately after restart
+    int opt = 1;
+    setsockopt(server_sock_global, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
-    listen(server_sock, 5);
+    bind(server_sock_global, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    listen(server_sock_global, 5);
     logger.info("Manager listening on port " + std::to_string(PORT));
 
     std::thread monitorThread(monitorNodes);
     monitorThread.detach();
 
-    while (true) {
+    while (!shutdown_requested) {
         sockaddr_in client_addr{};
         socklen_t client_len = sizeof(client_addr);
-        int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
+        int client_sock = accept(server_sock_global, (struct sockaddr*)&client_addr, &client_len);
+        
+        if (client_sock < 0) {
+            if (shutdown_requested) break;
+            continue;
+        }
+        
         std::thread(handleClient, client_sock).detach();
     }
+    
+    close(server_sock_global);
+    logger.info("Manager shut down gracefully.");
 }
 
 bool isPortAvailable(int port) {
@@ -242,7 +252,7 @@ int main(int argc, char* argv[]) {
             } else {
                 std::cout << "[INFO] Primary alive. Backup waiting..." << std::endl;
             }
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
     else {
